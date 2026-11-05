@@ -20,21 +20,15 @@ const ZENITH_NETWORK = {
   blockExplorerUrls: ["https://explorer.testnet.zenith.network/"],
 };
 
-declare global {
-  interface Window {
-    ethereum?: {
-      request: (args: {
-        method: string;
-        params?: unknown[];
-      }) => Promise<unknown>;
-      on?: (event: string, callback: (...args: unknown[]) => void) => void;
-      removeListener?: (
-        event: string,
-        callback: (...args: unknown[]) => void
-      ) => void;
-    };
-  }
-}
+// Tipo local para os eventos da carteira.
+// Não redeclara Window.ethereum globalmente.
+type EthereumWithEvents = {
+  on?: (event: string, callback: (...args: unknown[]) => void) => void;
+  removeListener?: (
+    event: string,
+    callback: (...args: unknown[]) => void
+  ) => void;
+};
 
 export default function WalletConnect() {
   const [address, setAddress] = useState("");
@@ -53,7 +47,10 @@ export default function WalletConnect() {
         window.ethereum as ConstructorParameters<typeof BrowserProvider>[0]
       );
 
-      const accounts = await provider.send("eth_accounts", []) as string[];
+      const accounts = await provider.send(
+        "eth_accounts",
+        []
+      ) as string[];
 
       if (!accounts || accounts.length === 0) {
         setAddress("");
@@ -81,7 +78,9 @@ export default function WalletConnect() {
           .eq("user_id", sessionData.session!.user.id)
           .single();
 
-        if (profile) setPoints(profile.total_points);
+        if (profile) {
+          setPoints(profile.total_points);
+        }
       }
     } catch (err) {
       console.error("Erro ao recuperar carteira:", err);
@@ -94,8 +93,19 @@ export default function WalletConnect() {
     const handleAccountsChanged = () => restoreConnection();
     const handleChainChanged = () => restoreConnection();
 
-    window.ethereum?.on?.("accountsChanged", handleAccountsChanged);
-    window.ethereum?.on?.("chainChanged", handleChainChanged);
+    const ethereumWithEvents = window.ethereum as
+      | (NonNullable<typeof window.ethereum> & EthereumWithEvents)
+      | undefined;
+
+    ethereumWithEvents?.on?.(
+      "accountsChanged",
+      handleAccountsChanged
+    );
+
+    ethereumWithEvents?.on?.(
+      "chainChanged",
+      handleChainChanged
+    );
 
     const { data: authListener } = supabase.auth.onAuthStateChange(
       (event, session) => {
@@ -104,14 +114,16 @@ export default function WalletConnect() {
     );
 
     return () => {
-      window.ethereum?.removeListener?.(
+      ethereumWithEvents?.removeListener?.(
         "accountsChanged",
         handleAccountsChanged
       );
-      window.ethereum?.removeListener?.(
+
+      ethereumWithEvents?.removeListener?.(
         "chainChanged",
         handleChainChanged
       );
+
       authListener.subscription.unsubscribe();
     };
   }, []);
@@ -148,7 +160,9 @@ export default function WalletConnect() {
         Number(network.chainId) === CHAIN_ID
       );
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Erro ao conectar.");
+      setError(
+        err instanceof Error ? err.message : "Erro ao conectar."
+      );
     } finally {
       setLoading(false);
     }
@@ -258,7 +272,9 @@ export default function WalletConnect() {
       await completeConnectWalletMission(data.user.id);
     } catch (err) {
       setError(
-        err instanceof Error ? err.message : "Erro ao autenticar a carteira."
+        err instanceof Error
+          ? err.message
+          : "Erro ao autenticar a carteira."
       );
     } finally {
       setLoading(false);
@@ -286,7 +302,9 @@ export default function WalletConnect() {
       await completeConnectWalletMission(user.id);
     } catch (err) {
       setError(
-        err instanceof Error ? err.message : "Erro ao registrar a missão."
+        err instanceof Error
+          ? err.message
+          : "Erro ao registrar a missão."
       );
     } finally {
       setLoading(false);
@@ -308,7 +326,9 @@ export default function WalletConnect() {
       await restoreConnection();
     } catch (err) {
       setError(
-        err instanceof Error ? err.message : "Erro ao adicionar rede."
+        err instanceof Error
+          ? err.message
+          : "Erro ao adicionar rede."
       );
     } finally {
       setLoading(false);
